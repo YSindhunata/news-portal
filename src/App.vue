@@ -16,27 +16,27 @@ const fetchNews = async () => {
   isLoading.value = true
   error.value = null
 
-  const mediastackApiKey = import.meta.env.VITE_MEDIASTACK_KEY
+  const currentsApiKey = import.meta.env.VITE_CURRENTS_KEY
   const gnewsApiKey = import.meta.env.VITE_GNEWS_KEY
   const newsdataApiKey = import.meta.env.VITE_NEWSDATA_KEY
 
-  const mediastackUrl = `http://api.mediastack.com/v1/news?access_key=${mediastackApiKey}&keywords=artificial%20intelligence&limit=20&languages=en`
+  const currentsUrl = `https://api.currentsapi.services/v1/search?keywords=artificial%20intelligence&language=en&apiKey=${currentsApiKey}`
   const gnewsUrl = `https://gnews.io/api/v4/search?q=artificial%20intelligence&apikey=${gnewsApiKey}&lang=en&max=20`
   const newsdataUrl = `https://newsdata.io/api/1/news?apikey=${newsdataApiKey}&q=artificial%20intelligence&language=en`
 
   try {
-    const [mediastackResponse, gnewsResponse, newsdataResponse] = await Promise.all([
-      axios.get(mediastackUrl),
+    const [currentsResponse, gnewsResponse, newsdataResponse] = await Promise.all([
+      axios.get(currentsUrl),
       axios.get(gnewsUrl),
       axios.get(newsdataUrl),
     ])
 
-    const formattedMediaStack = mediastackResponse.data.data.map((article) => ({
+    const formattedCurrents = currentsResponse.data.news.map((article) => ({
       title: article.title,
       url: article.url,
       urlToImage: article.image,
-      publishedAt: article.published_at,
-      source: { name: article.source },
+      publishedAt: article.published,
+      source: { name: article.author },
       author: article.author,
     }))
 
@@ -58,17 +58,18 @@ const fetchNews = async () => {
       author: article.creator ? article.creator.join(', ') : article.source_id,
     }))
 
-    const combinedArticles = [...formattedMediaStack, ...formattedGNews, ...formattedNewsData]
+    const combinedArticles = [...formattedCurrents, ...formattedGNews, ...formattedNewsData]
 
     const uniqueArticles = Array.from(
       new Map(combinedArticles.map((item) => [item['url'], item])).values(),
     )
     articles.value = uniqueArticles
-      .filter((article) => article.title && article.title !== '[Removed]')
+      .filter((article) => article.title && article.title !== 'No title')
       .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
   } catch (e) {
     console.error('Gagal mengambil data berita:', e)
-    error.value = 'Maaf, terjadi kesalahan saat mengambil berita. Silakan coba lagi nanti.'
+    error.value =
+      'Maaf, terjadi kesalahan saat mengambil berita. Pastikan semua API key sudah benar.'
   } finally {
     isLoading.value = false
   }
