@@ -15,38 +15,93 @@ onMounted(() => {
 const fetchNews = async () => {
   isLoading.value = true
   error.value = null
+  let allFetchedArticles = []
+  let errorMessages = []
 
   const newsApiKey = import.meta.env.VITE_NEWSAPI_KEY
   const gnewsApiKey = import.meta.env.VITE_GNEWS_KEY
-  const newsdataApiKey = import.meta.env.VITE_NEWSDATA_KEY
+  const newsDataApiKey = import.meta.env.VITE_NEWSDATA_KEY
 
-  const url1 = `https://newsapi.org/v2/everything?q=artificial%20intelligence&apiKey=${newsApiKey}&pageSize=20`
-  const url2 = `https://gnews.io/api/v4/search?q=artificial%20intelligence&l&apikey=${gnewsApiKey}&max=20`
-  const url3 = `https://newsdata.io/api/1/latest?apikey=${newsdataApiKey}&q=artificial%20intelligence`
+  const endpoints = [
+    {
+      name: 'NewsAPI',
+      url: `https://newsapi.org/v2/everything?q=artificial%20intelligence&apiKey=${newsApiKey}&pageSize=20&language=en`,
+    },
+    {
+      name: 'GNews',
+      url: `https://gnews.io/api/v4/search?q=artificial%20intelligence&apikey=${gnewsApiKey}&lang=en&max=20`,
+    },
+    {
+      name: 'NewsData',
+      url: `https://newsdata.io/api/1/news?apikey=${newsDataApiKey}&q=artificial%20intelligence&language=en`,
+    },
+  ]
 
-  try {
-    const responses = await Promise.all([axios.get(url1), axios.get(url2), axios.get(url3)])
+  // Menggunakan Promise.allSettled untuk melanjutkan meskipun ada API yang gagal
+  const results = await Promise.allSettled(endpoints.map((ep) => axios.get(ep.url)))
 
-    let combinedArticles = []
-    responses.forEach((response) => {
-      if (response.data.articles) {
-        combinedArticles = combinedArticles.concat(response.data.articles)
+  results.forEach((result, index) => {
+    const apiName = endpoints[index].name
+
+    if (result.status === 'fulfilled') {
+      // Normalisasi data berdasarkan nama API
+      let formattedArticles = []
+      if (apiName === 'NewsAPI') {
+        formattedArticles = result.value.data.articles.map((a) => ({
+          title: a.title,
+          url: a.url,
+          urlToImage: a.urlToImage,
+          publishedAt: a.publishedAt,
+          source: { name: a.source.name },
+          author: a.author,
+        }))
+      } else if (apiName === 'GNews') {
+        formattedArticles = result.value.data.articles.map((a) => ({
+          title: a.title,
+          url: a.url,
+          urlToImage: a.image,
+          publishedAt: a.publishedAt,
+          source: { name: a.source.name },
+          author: a.source.name,
+        }))
+      } else if (apiName === 'NewsData') {
+        formattedArticles = result.value.data.results.map((a) => ({
+          title: a.title,
+          url: a.link,
+          urlToImage: a.image_url,
+          publishedAt: a.pubDate,
+          source: { name: a.source_id },
+          author: a.creator ? a.creator.join(', ') : a.source_id,
+        }))
       }
-    })
+      allFetchedArticles.push(...formattedArticles)
+    } else {
+      // Jika API gagal, catat pesan errornya
+      console.error(`Gagal mengambil data dari ${apiName}:`, result.reason)
+      errorMessages.push(`Gagal memuat dari ${apiName}.`)
+    }
+  })
 
+  if (allFetchedArticles.length > 0) {
+    // Jika setidaknya ada satu API yang berhasil, tampilkan beritanya
     const uniqueArticles = Array.from(
-      new Map(combinedArticles.map((item) => [item['url'], item])).values(),
+      new Map(allFetchedArticles.map((item) => [item['url'], item])).values(),
     )
+    articles.value = uniqueArticles
+      .filter((article) => article.title && article.title !== '[Removed]')
+      .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
 
-    articles.value = uniqueArticles.sort(
-      (a, b) => new Date(b.publishedAt) - new Date(a.publishedAt),
-    )
-  } catch (e) {
-    console.error('Gagal mengambil data berita:', e)
-    error.value = 'Maaf, terjadi kesalahan saat mengambil berita. Silakan coba lagi nanti.'
-  } finally {
-    isLoading.value = false
+    // Tampilkan juga pesan error jika ada API yang gagal (opsional)
+    if (errorMessages.length > 0) {
+      error.value = errorMessages.join(' ')
+    }
+  } else {
+    // Jika semua API gagal, tampilkan pesan error utama
+    error.value =
+      'Semua sumber berita gagal dimuat. Kemungkinan API key diblokir di lingkungan production.'
   }
+
+  isLoading.value = false
 }
 
 const filteredArticles = computed(() => {
