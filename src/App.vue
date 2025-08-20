@@ -18,15 +18,10 @@ const fetchNews = async () => {
   let allFetchedArticles = []
   let errorMessages = []
 
-  const newsApiKey = import.meta.env.VITE_NEWSAPI_KEY
   const gnewsApiKey = import.meta.env.VITE_GNEWS_KEY
   const newsDataApiKey = import.meta.env.VITE_NEWSDATA_KEY
 
   const endpoints = [
-    {
-      name: 'NewsAPI',
-      url: `https://newsapi.org/v2/everything?q=artificial%20intelligence&apiKey=${newsApiKey}&pageSize=20&language=en`,
-    },
     {
       name: 'GNews',
       url: `https://gnews.io/api/v4/search?q=artificial%20intelligence&apikey=${gnewsApiKey}&lang=en&max=20`,
@@ -37,25 +32,14 @@ const fetchNews = async () => {
     },
   ]
 
-  // Menggunakan Promise.allSettled untuk melanjutkan meskipun ada API yang gagal
   const results = await Promise.allSettled(endpoints.map((ep) => axios.get(ep.url)))
 
   results.forEach((result, index) => {
     const apiName = endpoints[index].name
 
     if (result.status === 'fulfilled') {
-      // Normalisasi data berdasarkan nama API
       let formattedArticles = []
-      if (apiName === 'NewsAPI') {
-        formattedArticles = result.value.data.articles.map((a) => ({
-          title: a.title,
-          url: a.url,
-          urlToImage: a.urlToImage,
-          publishedAt: a.publishedAt,
-          source: { name: a.source.name },
-          author: a.author,
-        }))
-      } else if (apiName === 'GNews') {
+      if (apiName === 'GNews') {
         formattedArticles = result.value.data.articles.map((a) => ({
           title: a.title,
           url: a.url,
@@ -76,14 +60,12 @@ const fetchNews = async () => {
       }
       allFetchedArticles.push(...formattedArticles)
     } else {
-      // Jika API gagal, catat pesan errornya
       console.error(`Gagal mengambil data dari ${apiName}:`, result.reason)
       errorMessages.push(`Gagal memuat dari ${apiName}.`)
     }
   })
 
   if (allFetchedArticles.length > 0) {
-    // Jika setidaknya ada satu API yang berhasil, tampilkan beritanya
     const uniqueArticles = Array.from(
       new Map(allFetchedArticles.map((item) => [item['url'], item])).values(),
     )
@@ -91,14 +73,11 @@ const fetchNews = async () => {
       .filter((article) => article.title && article.title !== '[Removed]')
       .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
 
-    // Tampilkan juga pesan error jika ada API yang gagal (opsional)
     if (errorMessages.length > 0) {
       error.value = errorMessages.join(' ')
     }
   } else {
-    // Jika semua API gagal, tampilkan pesan error utama
-    error.value =
-      'Semua sumber berita gagal dimuat. Kemungkinan API key diblokir di lingkungan production.'
+    error.value = 'Semua sumber berita gagal dimuat. Silakan periksa API key Anda.'
   }
 
   isLoading.value = false
