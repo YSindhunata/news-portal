@@ -15,72 +15,63 @@ onMounted(() => {
 const fetchNews = async () => {
   isLoading.value = true
   error.value = null
-  let allFetchedArticles = []
-  let errorMessages = []
 
+  const mediastackApiKey = import.meta.env.VITE_MEDIASTACK_KEY
   const gnewsApiKey = import.meta.env.VITE_GNEWS_KEY
-  const newsDataApiKey = import.meta.env.VITE_NEWSDATA_KEY
+  const newsdataApiKey = import.meta.env.VITE_NEWSDATA_KEY
 
-  const endpoints = [
-    {
-      name: 'GNews',
-      url: `https://gnews.io/api/v4/search?q=artificial%20intelligence&apikey=${gnewsApiKey}&lang=en&max=20`,
-    },
-    {
-      name: 'NewsData',
-      url: `https://newsdata.io/api/1/news?apikey=${newsDataApiKey}&q=artificial%20intelligence&language=en`,
-    },
-  ]
+  const mediastackUrl = `http://api.mediastack.com/v1/news?access_key=${mediastackApiKey}&keywords=artificial%20intelligence&limit=20&languages=en`
+  const gnewsUrl = `https://gnews.io/api/v4/search?q=artificial%20intelligence&apikey=${gnewsApiKey}&lang=en&max=20`
+  const newsdataUrl = `https://newsdata.io/api/1/news?apikey=${newsdataApiKey}&q=artificial%20intelligence&language=en`
 
-  const results = await Promise.allSettled(endpoints.map((ep) => axios.get(ep.url)))
+  try {
+    const [mediastackResponse, gnewsResponse, newsdataResponse] = await Promise.all([
+      axios.get(mediastackUrl),
+      axios.get(gnewsUrl),
+      axios.get(newsdataUrl),
+    ])
 
-  results.forEach((result, index) => {
-    const apiName = endpoints[index].name
+    const formattedMediaStack = mediastackResponse.data.data.map((article) => ({
+      title: article.title,
+      url: article.url,
+      urlToImage: article.image,
+      publishedAt: article.published_at,
+      source: { name: article.source },
+      author: article.author,
+    }))
 
-    if (result.status === 'fulfilled') {
-      let formattedArticles = []
-      if (apiName === 'GNews') {
-        formattedArticles = result.value.data.articles.map((a) => ({
-          title: a.title,
-          url: a.url,
-          urlToImage: a.image,
-          publishedAt: a.publishedAt,
-          source: { name: a.source.name },
-          author: a.source.name,
-        }))
-      } else if (apiName === 'NewsData') {
-        formattedArticles = result.value.data.results.map((a) => ({
-          title: a.title,
-          url: a.link,
-          urlToImage: a.image_url,
-          publishedAt: a.pubDate,
-          source: { name: a.source_id },
-          author: a.creator ? a.creator.join(', ') : a.source_id,
-        }))
-      }
-      allFetchedArticles.push(...formattedArticles)
-    } else {
-      console.error(`Gagal mengambil data dari ${apiName}:`, result.reason)
-      errorMessages.push(`Gagal memuat dari ${apiName}.`)
-    }
-  })
+    const formattedGNews = gnewsResponse.data.articles.map((article) => ({
+      title: article.title,
+      url: article.url,
+      urlToImage: article.image,
+      publishedAt: article.publishedAt,
+      source: { name: article.source.name },
+      author: article.source.name,
+    }))
 
-  if (allFetchedArticles.length > 0) {
+    const formattedNewsData = newsdataResponse.data.results.map((article) => ({
+      title: article.title,
+      url: article.link,
+      urlToImage: article.image_url,
+      publishedAt: article.pubDate,
+      source: { name: article.source_id },
+      author: article.creator ? article.creator.join(', ') : article.source_id,
+    }))
+
+    const combinedArticles = [...formattedMediaStack, ...formattedGNews, ...formattedNewsData]
+
     const uniqueArticles = Array.from(
-      new Map(allFetchedArticles.map((item) => [item['url'], item])).values(),
+      new Map(combinedArticles.map((item) => [item['url'], item])).values(),
     )
     articles.value = uniqueArticles
       .filter((article) => article.title && article.title !== '[Removed]')
       .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
-
-    if (errorMessages.length > 0) {
-      error.value = errorMessages.join(' ')
-    }
-  } else {
-    error.value = 'Semua sumber berita gagal dimuat. Silakan periksa API key Anda.'
+  } catch (e) {
+    console.error('Gagal mengambil data berita:', e)
+    error.value = 'Maaf, terjadi kesalahan saat mengambil berita. Silakan coba lagi nanti.'
+  } finally {
+    isLoading.value = false
   }
-
-  isLoading.value = false
 }
 
 const filteredArticles = computed(() => {
