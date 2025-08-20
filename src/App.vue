@@ -2,52 +2,42 @@
 import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 
-// ref() digunakan untuk membuat variabel reaktif
-const articles = ref([]) // Untuk menampung semua artikel berita
-const searchQuery = ref('') // Untuk menampung input dari kotak pencarian
-const isLoading = ref(true) // Untuk menampilkan status loading
-const error = ref(null) // Untuk menampilkan pesan error jika ada
+const articles = ref([])
+const searchQuery = ref('')
+const isLoading = ref(true)
+const error = ref(null)
 const isSearchVisible = ref(false)
 
-// API FETCHING
 onMounted(() => {
   fetchNews()
 })
 
-// Fungsi untuk mengambil data dari berbagai API
 const fetchNews = async () => {
   isLoading.value = true
   error.value = null
 
-  // Ambil API keys dari .env file (API disimpan di file .env.local)
   const newsApiKey = import.meta.env.VITE_NEWSAPI_KEY
   const gnewsApiKey = import.meta.env.VITE_GNEWS_KEY
   const newsdataApiKey = import.meta.env.VITE_NEWSDATA_KEY
 
-  // endpoint API yang akan dipanggil. Mencari dengan kata kunci "artificial intelligence"
   const url1 = `https://newsapi.org/v2/everything?q=artificial%20intelligence&apiKey=${newsApiKey}&pageSize=20`
   const url2 = `https://gnews.io/api/v4/search?q=artificial%20intelligence&l&apikey=${gnewsApiKey}&max=20`
   const url3 = `https://newsdata.io/api/1/latest?apikey=${newsdataApiKey}&q=artificial%20intelligence`
 
   try {
-    // Promise.all untuk memanggil semua API secara paralel agar lebih cepat
     const responses = await Promise.all([axios.get(url1), axios.get(url2), axios.get(url3)])
 
-    // Menggabungkan dan memformat data dari semua response
     let combinedArticles = []
     responses.forEach((response) => {
-      // Sesuaikan 'response.data.articles' dengan struktur data dari API
       if (response.data.articles) {
         combinedArticles = combinedArticles.concat(response.data.articles)
       }
     })
 
-    // Menghapus duplikat berdasarkan URL artikel
     const uniqueArticles = Array.from(
       new Map(combinedArticles.map((item) => [item['url'], item])).values(),
     )
 
-    // mensortir artikel dari yang terbaru
     articles.value = uniqueArticles.sort(
       (a, b) => new Date(b.publishedAt) - new Date(a.publishedAt),
     )
@@ -59,8 +49,6 @@ const fetchNews = async () => {
   }
 }
 
-// FITUR PENCARIAN
-// computed property untuk memfilter berita secara reaktif berdasarkan searchQuery
 const filteredArticles = computed(() => {
   if (!searchQuery.value) {
     return articles.value
@@ -70,7 +58,6 @@ const filteredArticles = computed(() => {
   )
 })
 
-// Fungsi helper untuk memformat tanggal
 const formatDate = (dateString) => {
   return new Date(dateString).toLocaleString('id-ID', {
     year: 'numeric',
