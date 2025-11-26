@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import axios from 'axios'
 
 const articles = ref([])
@@ -16,68 +16,81 @@ const fetchNews = async () => {
   isLoading.value = true
   error.value = null
 
+  const currentsApiKey = import.meta.env.VITE_CURRENTS_KEY
   const gnewsApiKey = import.meta.env.VITE_GNEWS_KEY
   const newsdataApiKey = import.meta.env.VITE_NEWSDATA_KEY
 
+  const currentsUrl = `https://api.currentsapi.services/v1/search?keywords=artificial%20intelligence&language=en&apiKey=${currentsApiKey}`
   const gnewsUrl = `https://gnews.io/api/v4/search?q=artificial%20intelligence&apikey=${gnewsApiKey}&lang=en&max=20`
   const newsdataUrl = `https://newsdata.io/api/1/news?apikey=${newsdataApiKey}&q=artificial%20intelligence&language=en`
 
   try {
-    // GANTI: Gunakan allSettled agar jika satu gagal, yang lain tetap jalan
-    const results = await Promise.allSettled([axios.get(gnewsUrl), axios.get(newsdataUrl)])
+    const [currentsResponse, gnewsResponse, newsdataResponse] = await Promise.all([
+      axios.get(currentsUrl),
+      axios.get(gnewsUrl),
+      axios.get(newsdataUrl),
+    ])
 
-    const [gnewsResult, newsdataResult] = results
-    let combinedArticles = []
+    const formattedCurrents = currentsResponse.data.news.map((article) => ({
+      title: article.title,
+      url: article.url,
+      urlToImage: article.image,
+      publishedAt: article.published,
+      source: { name: article.author },
+      author: article.author,
+    }))
 
-    // 1. Cek & Proses GNews
-    if (gnewsResult.status === 'fulfilled') {
-      const formattedGNews = gnewsResult.value.data.articles.map((article) => ({
-        title: article.title,
-        url: article.url,
-        urlToImage: article.image,
-        publishedAt: article.publishedAt,
-        source: { name: article.source.name },
-        author: article.source.name,
-      }))
-      combinedArticles = [...combinedArticles, ...formattedGNews]
-    } else {
-      console.warn('GNews gagal dimuat:', gnewsResult.reason)
-    }
+    const formattedGNews = gnewsResponse.data.articles.map((article) => ({
+      title: article.title,
+      url: article.url,
+      urlToImage: article.image,
+      publishedAt: article.publishedAt,
+      source: { name: article.source.name },
+      author: article.source.name,
+    }))
 
-    // 2. Cek & Proses NewsData
-    if (newsdataResult.status === 'fulfilled') {
-      const formattedNewsData = newsdataResult.value.data.results.map((article) => ({
-        title: article.title,
-        url: article.link,
-        urlToImage: article.image_url,
-        publishedAt: article.pubDate,
-        source: { name: article.source_id },
-        author: article.creator ? article.creator.join(', ') : article.source_id,
-      }))
-      combinedArticles = [...combinedArticles, ...formattedNewsData]
-    } else {
-      console.warn('NewsData gagal dimuat:', newsdataResult.reason)
-    }
+    const formattedNewsData = newsdataResponse.data.results.map((article) => ({
+      title: article.title,
+      url: article.link,
+      urlToImage: article.image_url,
+      publishedAt: article.pubDate,
+      source: { name: article.source_id },
+      author: article.creator ? article.creator.join(', ') : article.source_id,
+    }))
 
-    // Jika kedua API gagal total
-    if (combinedArticles.length === 0) {
-      throw new Error('Semua sumber berita gagal dimuat.')
-    }
+    const combinedArticles = [...formattedCurrents, ...formattedGNews, ...formattedNewsData]
 
-    // Filter dan Sorting (Sama seperti sebelumnya)
     const uniqueArticles = Array.from(
       new Map(combinedArticles.map((item) => [item['url'], item])).values(),
     )
-
     articles.value = uniqueArticles
       .filter((article) => article.title && article.title !== 'No title')
       .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
   } catch (e) {
-    console.error('Error fatal:', e)
-    error.value = 'Gagal memuat berita. Silakan cek koneksi atau kuota API.'
+    console.error('Gagal mengambil data berita:', e)
+    error.value = 'Maaf, terjadi kesalahan saat mengambil berita'
   } finally {
     isLoading.value = false
   }
+}
+
+const filteredArticles = computed(() => {
+  if (!searchQuery.value) {
+    return articles.value
+  }
+  return articles.value.filter((article) =>
+    article.title.toLowerCase().includes(searchQuery.value.toLowerCase()),
+  )
+})
+
+const formatDate = (dateString) => {
+  return new Date(dateString).toLocaleString('id-ID', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 </script>
 
