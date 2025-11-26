@@ -25,7 +25,7 @@ const fetchNews = async () => {
   const newsdataUrl = `https://newsdata.io/api/1/news?apikey=${newsdataApiKey}&q=artificial%20intelligence&language=en`
 
   try {
-    const [currentsResponse, gnewsResponse, newsdataResponse] = await Promise.all([
+    const [currentsResponse, gnewsResponse, newsdataResponse] = await Promise.allSettled([
       axios.get(currentsUrl),
       axios.get(gnewsUrl),
       axios.get(newsdataUrl),
