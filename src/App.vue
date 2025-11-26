@@ -6,7 +6,6 @@ const articles = ref([])
 const searchQuery = ref('')
 const isLoading = ref(true)
 const error = ref(null)
-const isSearchVisible = ref(false)
 
 onMounted(() => {
   fetchNews()
@@ -20,64 +19,98 @@ const fetchNews = async () => {
   const gnewsApiKey = import.meta.env.VITE_GNEWS_KEY
   const newsdataApiKey = import.meta.env.VITE_NEWSDATA_KEY
 
+  // 1. URL Currents
   const currentsUrl = `https://api.currentsapi.services/v1/search?keywords=artificial%20intelligence&language=en&apiKey=${currentsApiKey}`
-  const gnewsUrl = `https://gnews.io/api/v4/search?q=artificial%20intelligence&apikey=${gnewsApiKey}&lang=en&max=20`
+
+  // 2. URL GNews (DIBUNGKUS PROXY untuk menembus CORS)
+  // Kita encode URL aslinya, lalu tempel di belakang corsproxy.io
+  const rawGnewsUrl = `https://gnews.io/api/v4/search?q=artificial%20intelligence&apikey=${gnewsApiKey}&lang=en&max=20`
+  const gnewsUrl = `https://corsproxy.io/?${encodeURIComponent(rawGnewsUrl)}`
+
+  // 3. URL NewsData
   const newsdataUrl = `https://newsdata.io/api/1/news?apikey=${newsdataApiKey}&q=artificial%20intelligence&language=en`
 
   try {
-    const [currentsResponse, gnewsResponse, newsdataResponse] = await Promise.allSettled([
+    // PENTING: Pakai allSettled. Jangan diganti ke Promise.all biasa.
+    const results = await Promise.allSettled([
       axios.get(currentsUrl),
-      axios.get(gnewsUrl),
+      axios.get(gnewsUrl), // Request ini sekarang lewat proxy
       axios.get(newsdataUrl),
     ])
 
-    const formattedCurrents = currentsResponse.data.news.map((article) => ({
-      title: article.title,
-      url: article.url,
-      urlToImage: article.image,
-      publishedAt: article.published,
-      source: { name: article.author },
-      author: article.author,
-    }))
+    const [currentsResult, gnewsResult, newsdataResult] = results
+    let combinedArticles = []
 
-    const formattedGNews = gnewsResponse.data.articles.map((article) => ({
-      title: article.title,
-      url: article.url,
-      urlToImage: article.image,
-      publishedAt: article.publishedAt,
-      source: { name: article.source.name },
-      author: article.source.name,
-    }))
+    // --- PROSES CURRENTS ---
+    if (currentsResult.status === 'fulfilled') {
+      const formattedCurrents = currentsResult.value.data.news.map((article) => ({
+        title: article.title,
+        url: article.url,
+        urlToImage: article.image,
+        publishedAt: article.published,
+        source: { name: 'CurrentsAPI' },
+        author: article.author,
+      }))
+      combinedArticles = [...combinedArticles, ...formattedCurrents]
+    } else {
+      console.warn('Currents Gagal (mungkin limit/cors):', currentsResult.reason)
+    }
 
-    const formattedNewsData = newsdataResponse.data.results.map((article) => ({
-      title: article.title,
-      url: article.link,
-      urlToImage: article.image_url,
-      publishedAt: article.pubDate,
-      source: { name: article.source_id },
-      author: article.creator ? article.creator.join(', ') : article.source_id,
-    }))
+    // --- PROSES GNEWS ---
+    if (gnewsResult.status === 'fulfilled') {
+      const formattedGNews = gnewsResult.value.data.articles.map((article) => ({
+        title: article.title,
+        url: article.url,
+        urlToImage: article.image,
+        publishedAt: article.publishedAt,
+        source: { name: article.source.name },
+        author: article.source.name,
+      }))
+      combinedArticles = [...combinedArticles, ...formattedGNews]
+    } else {
+      // Jika masih error, pesan ini akan muncul di Console (F12)
+      console.warn('GNews Gagal (meski sudah pakai proxy):', gnewsResult.reason)
+    }
 
-    const combinedArticles = [...formattedCurrents, ...formattedGNews, ...formattedNewsData]
+    // --- PROSES NEWSDATA ---
+    if (newsdataResult.status === 'fulfilled') {
+      const formattedNewsData = newsdataResult.value.data.results.map((article) => ({
+        title: article.title,
+        url: article.link,
+        urlToImage: article.image_url,
+        publishedAt: article.pubDate,
+        source: { name: article.source_id },
+        author: article.creator ? article.creator.join(', ') : article.source_id,
+      }))
+      combinedArticles = [...combinedArticles, ...formattedNewsData]
+    } else {
+      console.warn('NewsData Gagal:', newsdataResult.reason)
+    }
 
+    // Cek apakah ada data sama sekali
+    if (combinedArticles.length === 0) {
+      throw new Error('Semua API gagal dimuat. Cek Console (F12) untuk detail.')
+    }
+
+    // Filter duplikat dan sorting
     const uniqueArticles = Array.from(
       new Map(combinedArticles.map((item) => [item['url'], item])).values(),
     )
+
     articles.value = uniqueArticles
       .filter((article) => article.title && article.title !== 'No title')
       .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
   } catch (e) {
-    console.error('Gagal mengambil data berita:', e)
-    error.value = 'Maaf, terjadi kesalahan saat mengambil berita'
+    console.error('Error Fatal:', e)
+    error.value = 'Maaf, terjadi gangguan koneksi ke server berita.'
   } finally {
     isLoading.value = false
   }
 }
 
+// ... Computed dan functions lainnya tetap sama ...
 const filteredArticles = computed(() => {
-  if (!searchQuery.value) {
-    return articles.value
-  }
+  if (!searchQuery.value) return articles.value
   return articles.value.filter((article) =>
     article.title.toLowerCase().includes(searchQuery.value.toLowerCase()),
   )
