@@ -16,17 +16,17 @@ const fetchNews = async () => {
   isLoading.value = true
   error.value = null
 
-  const currentsApiKey = import.meta.env.VITE_CURRENTS_KEY
+  //const currentsApiKey = import.meta.env.VITE_CURRENTS_KEY
   const gnewsApiKey = import.meta.env.VITE_GNEWS_KEY
   const newsdataApiKey = import.meta.env.VITE_NEWSDATA_KEY
 
-  const currentsUrl = `https://api.currentsapi.services/v1/search?keywords=artificial%20intelligence&language=en&apiKey=${currentsApiKey}`
+  //const currentsUrl = `https://api.currentsapi.services/v1/search?keywords=artificial%20intelligence&language=en&apiKey=${currentsApiKey}`
   const gnewsUrl = `https://gnews.io/api/v4/search?q=artificial%20intelligence&apikey=${gnewsApiKey}&lang=en&max=20`
   const newsdataUrl = `https://newsdata.io/api/1/news?apikey=${newsdataApiKey}&q=artificial%20intelligence&language=en`
 
   try {
     const [currentsResponse, gnewsResponse, newsdataResponse] = await Promise.all([
-      axios.get(currentsUrl),
+      //axios.get(currentsUrl),
       axios.get(gnewsUrl),
       axios.get(newsdataUrl),
     ])
@@ -68,8 +68,7 @@ const fetchNews = async () => {
       .sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt))
   } catch (e) {
     console.error('Gagal mengambil data berita:', e)
-    error.value =
-      'Maaf, terjadi kesalahan saat mengambil berita. Pastikan semua API key sudah benar.'
+    error.value = 'Maaf, terjadi kesalahan saat mengambil berita.'
   } finally {
     isLoading.value = false
   }
