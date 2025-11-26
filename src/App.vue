@@ -25,20 +25,11 @@ const fetchNews = async () => {
   const newsdataUrl = `https://newsdata.io/api/1/news?apikey=${newsdataApiKey}&q=artificial%20intelligence&language=en`
 
   try {
-    const [currentsResponse, gnewsResponse, newsdataResponse] = await Promise.all([
+    const [gnewsResponse, newsdataResponse] = await Promise.all([
       //axios.get(currentsUrl),
       axios.get(gnewsUrl),
       axios.get(newsdataUrl),
     ])
-
-    const formattedCurrents = currentsResponse.data.news.map((article) => ({
-      title: article.title,
-      url: article.url,
-      urlToImage: article.image,
-      publishedAt: article.published,
-      source: { name: article.author },
-      author: article.author,
-    }))
 
     const formattedGNews = gnewsResponse.data.articles.map((article) => ({
       title: article.title,
@@ -58,7 +49,7 @@ const fetchNews = async () => {
       author: article.creator ? article.creator.join(', ') : article.source_id,
     }))
 
-    const combinedArticles = [...formattedCurrents, ...formattedGNews, ...formattedNewsData]
+    const combinedArticles = [...formattedGNews, ...formattedNewsData]
 
     const uniqueArticles = Array.from(
       new Map(combinedArticles.map((item) => [item['url'], item])).values(),
